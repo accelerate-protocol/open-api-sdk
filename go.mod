@@ -1,4 +1,4 @@
-module github.com/accelerate-protocal/open-api-sdk
+module github.com/accelerate-protocol/open-api-sdk
 
 go 1.24.4
 
