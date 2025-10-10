@@ -337,6 +337,8 @@ type RestTokenManage struct {
 
 // RestTokenMeta defines model for rest.TokenMeta.
 type RestTokenMeta struct {
+	// IsMutable 是否可更新
+	IsMutable     *bool  `json:"is_mutable,omitempty"`
 	TokenDecimals int    `json:"token_decimals"`
 	TokenName     string `json:"token_name"`
 	TokenSymbol   string `json:"token_symbol"`
@@ -348,6 +350,22 @@ type RestTxResultResp struct {
 	FailedMsg *string `json:"failed_msg,omitempty"`
 	Success   *bool   `json:"success,omitempty"`
 	TxHash    *string `json:"tx_hash,omitempty"`
+}
+
+// RestUpdateTokenMetadataPrepareResp defines model for rest.UpdateTokenMetadataPrepareResp.
+type RestUpdateTokenMetadataPrepareResp struct {
+	TxMsgBase64 string `json:"tx_msg_base64"`
+}
+
+// RestUpdateTokenMetadataReq defines model for rest.UpdateTokenMetadataReq.
+type RestUpdateTokenMetadataReq struct {
+	ChainId     string `json:"chain_id"`
+	TokenName   string `json:"token_name"`
+	TokenSymbol string `json:"token_symbol"`
+
+	// TokenUri logo地址
+	TokenUri     string `json:"token_uri"`
+	VaultAddress string `json:"vault_address"`
 }
 
 // GetApiV1CommonBalanceParams defines parameters for GetApiV1CommonBalance.
@@ -416,6 +434,9 @@ type PostApiV1PrimaryPrepareRedeemJSONRequestBody = RestRedeemReq
 
 // PostApiV1PrimaryPrepareSettleJSONRequestBody defines body for PostApiV1PrimaryPrepareSettle for application/json ContentType.
 type PostApiV1PrimaryPrepareSettleJSONRequestBody = RestSettleReq
+
+// PostApiV1PrimaryUpdateTokenMetaJSONRequestBody defines body for PostApiV1PrimaryUpdateTokenMeta for application/json ContentType.
+type PostApiV1PrimaryUpdateTokenMetaJSONRequestBody = RestUpdateTokenMetadataReq
 
 // PostApiV1SwapPrepareTxJSONRequestBody defines body for PostApiV1SwapPrepareTx for application/json ContentType.
 type PostApiV1SwapPrepareTxJSONRequestBody = RestSwapPrepareReq
@@ -541,6 +562,11 @@ type ClientInterface interface {
 	PostApiV1PrimaryPrepareSettleWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	PostApiV1PrimaryPrepareSettle(ctx context.Context, body PostApiV1PrimaryPrepareSettleJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostApiV1PrimaryUpdateTokenMetaWithBody request with any body
+	PostApiV1PrimaryUpdateTokenMetaWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	PostApiV1PrimaryUpdateTokenMeta(ctx context.Context, body PostApiV1PrimaryUpdateTokenMetaJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// PostApiV1SwapPrepareTxWithBody request with any body
 	PostApiV1SwapPrepareTxWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -769,6 +795,30 @@ func (c *Client) PostApiV1PrimaryPrepareSettleWithBody(ctx context.Context, cont
 
 func (c *Client) PostApiV1PrimaryPrepareSettle(ctx context.Context, body PostApiV1PrimaryPrepareSettleJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewPostApiV1PrimaryPrepareSettleRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) PostApiV1PrimaryUpdateTokenMetaWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiV1PrimaryUpdateTokenMetaRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) PostApiV1PrimaryUpdateTokenMeta(ctx context.Context, body PostApiV1PrimaryUpdateTokenMetaJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiV1PrimaryUpdateTokenMetaRequest(c.Server, body)
 	if err != nil {
 		return nil, err
 	}
@@ -1310,6 +1360,46 @@ func NewPostApiV1PrimaryPrepareSettleRequestWithBody(server string, contentType 
 	return req, nil
 }
 
+// NewPostApiV1PrimaryUpdateTokenMetaRequest calls the generic PostApiV1PrimaryUpdateTokenMeta builder with application/json body
+func NewPostApiV1PrimaryUpdateTokenMetaRequest(server string, body PostApiV1PrimaryUpdateTokenMetaJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPostApiV1PrimaryUpdateTokenMetaRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewPostApiV1PrimaryUpdateTokenMetaRequestWithBody generates requests for PostApiV1PrimaryUpdateTokenMeta with any type of body
+func NewPostApiV1PrimaryUpdateTokenMetaRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/primary/update_token_meta")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 // NewPostApiV1SwapPrepareTxRequest calls the generic PostApiV1SwapPrepareTx builder with application/json body
 func NewPostApiV1SwapPrepareTxRequest(server string, body PostApiV1SwapPrepareTxJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
@@ -1594,6 +1684,11 @@ type ClientWithResponsesInterface interface {
 	PostApiV1PrimaryPrepareSettleWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiV1PrimaryPrepareSettleResponse, error)
 
 	PostApiV1PrimaryPrepareSettleWithResponse(ctx context.Context, body PostApiV1PrimaryPrepareSettleJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiV1PrimaryPrepareSettleResponse, error)
+
+	// PostApiV1PrimaryUpdateTokenMetaWithBodyWithResponse request with any body
+	PostApiV1PrimaryUpdateTokenMetaWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiV1PrimaryUpdateTokenMetaResponse, error)
+
+	PostApiV1PrimaryUpdateTokenMetaWithResponse(ctx context.Context, body PostApiV1PrimaryUpdateTokenMetaJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiV1PrimaryUpdateTokenMetaResponse, error)
 
 	// PostApiV1SwapPrepareTxWithBodyWithResponse request with any body
 	PostApiV1SwapPrepareTxWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiV1SwapPrepareTxResponse, error)
@@ -1945,6 +2040,37 @@ func (r PostApiV1PrimaryPrepareSettleResponse) StatusCode() int {
 	return 0
 }
 
+type PostApiV1PrimaryUpdateTokenMetaResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *struct {
+		// Code Code is the response code
+		// @Description 响应状态码
+		Code *int                                `json:"code,omitempty"`
+		Data *RestUpdateTokenMetadataPrepareResp `json:"data,omitempty"`
+
+		// Message Message is the response message
+		// @Description 响应消息
+		Message *string `json:"message,omitempty"`
+	}
+}
+
+// Status returns HTTPResponse.Status
+func (r PostApiV1PrimaryUpdateTokenMetaResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PostApiV1PrimaryUpdateTokenMetaResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 type PostApiV1SwapPrepareTxResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -2168,6 +2294,23 @@ func (c *ClientWithResponses) PostApiV1PrimaryPrepareSettleWithResponse(ctx cont
 		return nil, err
 	}
 	return ParsePostApiV1PrimaryPrepareSettleResponse(rsp)
+}
+
+// PostApiV1PrimaryUpdateTokenMetaWithBodyWithResponse request with arbitrary body returning *PostApiV1PrimaryUpdateTokenMetaResponse
+func (c *ClientWithResponses) PostApiV1PrimaryUpdateTokenMetaWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiV1PrimaryUpdateTokenMetaResponse, error) {
+	rsp, err := c.PostApiV1PrimaryUpdateTokenMetaWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostApiV1PrimaryUpdateTokenMetaResponse(rsp)
+}
+
+func (c *ClientWithResponses) PostApiV1PrimaryUpdateTokenMetaWithResponse(ctx context.Context, body PostApiV1PrimaryUpdateTokenMetaJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiV1PrimaryUpdateTokenMetaResponse, error) {
+	rsp, err := c.PostApiV1PrimaryUpdateTokenMeta(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostApiV1PrimaryUpdateTokenMetaResponse(rsp)
 }
 
 // PostApiV1SwapPrepareTxWithBodyWithResponse request with arbitrary body returning *PostApiV1SwapPrepareTxResponse
@@ -2581,6 +2724,41 @@ func ParsePostApiV1PrimaryPrepareSettleResponse(rsp *http.Response) (*PostApiV1P
 	return response, nil
 }
 
+// ParsePostApiV1PrimaryUpdateTokenMetaResponse parses an HTTP response from a PostApiV1PrimaryUpdateTokenMetaWithResponse call
+func ParsePostApiV1PrimaryUpdateTokenMetaResponse(rsp *http.Response) (*PostApiV1PrimaryUpdateTokenMetaResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PostApiV1PrimaryUpdateTokenMetaResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			// Code Code is the response code
+			// @Description 响应状态码
+			Code *int                                `json:"code,omitempty"`
+			Data *RestUpdateTokenMetadataPrepareResp `json:"data,omitempty"`
+
+			// Message Message is the response message
+			// @Description 响应消息
+			Message *string `json:"message,omitempty"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParsePostApiV1SwapPrepareTxResponse parses an HTTP response from a PostApiV1SwapPrepareTxWithResponse call
 func ParsePostApiV1SwapPrepareTxResponse(rsp *http.Response) (*PostApiV1SwapPrepareTxResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -2654,59 +2832,61 @@ func ParseGetApiV1SwapPriceResponse(rsp *http.Response) (*GetApiV1SwapPriceRespo
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"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",
-	"RYNQNszjSvbfAAAA//8/UiB7YEUAAA==",
+	"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",
+	"AAD//wVRuU7+SQAA",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file
